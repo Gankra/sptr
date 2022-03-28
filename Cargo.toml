@@ -1,11 +1,13 @@
 [package]
 name = "sptr"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "sptr: The Strict Provenance Polyfill"
 repository = "https://github.com/Gankra/sptr"
 
+[package.metadata.docs.rs]
+all-features = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

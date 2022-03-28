@@ -51,3 +51,6 @@ in your Cargo.toml.
 
 Rust is the canonical source of definitions for these APIs and semantics, but the docs
 here will vaguely try to mirror the docs checked into Rust.
+
+
+[Strict Provenance]: https://github.com/rust-lang/rust/issues/95228
