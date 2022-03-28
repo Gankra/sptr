@@ -14,3 +14,5 @@ repository = "https://github.com/Gankra/sptr"
 [features]
 default = ["deprecate_problems"]
 deprecate_problems = []
+uptr = []
+opaque_fn = []

@@ -1,4 +1,31 @@
+#![allow(unstable_name_collisions)]
+
 //! This library provides a stable polyfill for Rust's [Strict Provenance] experiment.
+//!
+//! Mapping to STD APIs:
+//! 
+//! ```rust ,ignore
+//! // core::ptr (sptr)
+//! pub fn invalid<T>(addr: usize) -> *const T;
+//! pub fn invalid_mut<T>(addr: usize) -> *mut T;
+//!
+//! // core::pointer (sptr::Strict)
+//! pub fn addr(self) -> usize;
+//! pub fn with_addr(self, addr: usize) -> Self;
+//! pub fn map_addr(self, f: impl FnOnce(usize) -> usize) -> Self;
+//!
+//! // NON-STANDARD EXTENSIONS (feature = uptr)
+//! sptr::uptr
+//! sptr::iptr
+//!
+//! // NON-STANDARD EXTENSIONS (feature = opaque_fn)
+//! sptr::OpaqueFn
+//!
+//! // DEPRECATED BY THIS MODEL in core::pointer (sptr::Strict)
+//! // (disable with `default-features = false`)
+//! pub fn to_bits(self) -> usize;
+//! pub fn from_bits(usize) -> Self;
+//! ```
 //!
 //! Swapping between the two should be as simple as switching between `sptr::` and `ptr::`
 //! for static functions. For methods, you must import `sptr::Strict` into your module for
@@ -20,24 +47,6 @@
 //!
 //! Rust is the canonical source of definitions for these APIs and semantics, but the docs
 //! here will vaguely try to mirror the docs checked into Rust. The current APIs are:
-//!
-//!
-//! ```rust ,ignore
-//! // core::ptr (sptr)
-//! pub fn invalid<T>(addr: usize) -> *const T;
-//! pub fn invalid_mut<T>(addr: usize) -> *mut T;
-//!
-//! // core::pointer (sptr::Strict)
-//! pub fn addr(self) -> usize;
-//! pub fn with_addr(self, addr: usize) -> Self;
-//! pub fn map_addr(self, f: impl FnOnce(usize) -> usize) -> Self;
-//!
-//! // DEPRECATED BY THIS MODEL in core::pointer (sptr::Strict)
-//! // (disable with `default-features = false`)
-//! pub fn to_bits(self) -> usize;
-//! pub fn from_bits(usize) -> Self;
-//! ```
-//!
 //!
 //! The following explanation of the model should also appear at the top of `core::ptr`:
 //!
@@ -356,364 +365,12 @@ pub const fn invalid_mut<T>(addr: usize) -> *mut T {
     addr as *mut T
 }
 
-// HMM...
-// #[repr(transparent)]
-// pub struct OpaqueFnPtr(fn () -> ());
-
-/// A pointer that pretends to be an integer, for API Crimes.
-///
-/// If you can't possibly satisfy strict provenance for whatever reason, you can at least
-/// use this type to make sure the compiler still understands that Pointers Are Happening.
-///
-/// All operations on this type will derive provenance from the left-hand-size (lhs).
-/// So `x + y` has `x`'s provenance. *Many* operations are nonsensical if the pointer
-/// inside is a real pointer, but hey, you've reached for the "I Know What I'm Doing"
-/// lever, so we'll let you *say* whatever gibberish you want.
-///
-/// Please submit a PR if you need some operation defined on usize to be exposed here.
-///
-/// Please don't use these types.
-#[repr(transparent)]
-#[allow(non_camel_case_types)]
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct uptr(*mut ());
-
-/// A pointer that pretends to be an integer, for API Crimes.
-///
-/// If you can't possibly satisfy strict provenance for whatever reason, you can at least
-/// use this type to make sure the compiler still understands that Pointers Are Happening.
-///
-/// All operations on this type will derive provenance from the left-hand-size (lhs).
-/// So `x + y` has `x`'s provenance. *Many* operations are nonsensical if the pointer
-/// inside is a real pointer, but hey, you've reached for the "I Know What I'm Doing"
-/// lever, so we'll let you *say* whatever gibberish you want.
-///
-/// Please submit a PR if you need some operation defined on isize to be exposed here.
-///
-/// Please don't use these types.
-#[repr(transparent)]
-#[allow(non_camel_case_types)]
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct iptr(*mut ());
-
-macro_rules! int_impls {
-    ($self_ty: ty, $int_ty: ty) => {
-        impl $self_ty {
-            pub const MIN: $self_ty = Self::from_int(<$int_ty>::MIN);
-            pub const MAX: $self_ty = Self::from_int(<$int_ty>::MAX);
-            pub const BITS: u32 = <$int_ty>::BITS;
-
-            #[inline]
-            #[must_use]
-            pub const fn from_int(val: $int_ty) -> Self {
-                Self(crate::invalid_mut(val as usize))
-            }
-
-            #[inline]
-            #[must_use]
-            pub const fn from_ptr_mut<T>(val: *mut T) -> Self {
-                Self(val as *mut ())
-            }
-
-            #[inline]
-            #[must_use]
-            pub const fn from_ptr<T>(val: *const T) -> Self {
-                Self(val as *const () as *mut ())
-            }
-
-            pub const fn to_ptr(self) -> *mut () {
-                self.0
-            }
-
-            #[inline]
-            #[must_use]
-            pub fn wrapping_add(self, rhs: Self) -> Self {
-                Self(
-                    self.0.map_addr(|a| {
-                        ((a as $int_ty).wrapping_add(rhs.0.addr() as $int_ty)) as usize
-                    }),
-                )
-            }
-            #[inline]
-            #[must_use]
-            pub fn wrapping_sub(self, rhs: Self) -> Self {
-                Self(
-                    self.0.map_addr(|a| {
-                        ((a as $int_ty).wrapping_sub(rhs.0.addr() as $int_ty)) as usize
-                    }),
-                )
-            }
-            #[inline]
-            #[must_use]
-            pub fn wrapping_mul(self, rhs: Self) -> Self {
-                Self(
-                    self.0.map_addr(|a| {
-                        ((a as $int_ty).wrapping_mul(rhs.0.addr() as $int_ty)) as usize
-                    }),
-                )
-            }
-            #[inline]
-            #[must_use]
-            pub fn wrapping_div(self, rhs: Self) -> Self {
-                Self(
-                    self.0.map_addr(|a| {
-                        ((a as $int_ty).wrapping_div(rhs.0.addr() as $int_ty)) as usize
-                    }),
-                )
-            }
-        }
-
-        impl From<$int_ty> for $self_ty {
-            #[inline]
-            #[must_use]
-            fn from(val: $int_ty) -> Self {
-                Self(crate::invalid_mut(val as usize))
-            }
-        }
-        impl<T> From<*mut T> for $self_ty {
-            #[inline]
-            #[must_use]
-            fn from(val: *mut T) -> Self {
-                Self(val as *mut ())
-            }
-        }
-        impl<T> From<*const T> for $self_ty {
-            #[inline]
-            #[must_use]
-            fn from(val: *const T) -> Self {
-                Self(val as *const () as *mut ())
-            }
-        }
-
-        impl core::ops::Add<Self> for $self_ty {
-            type Output = Self;
-            #[inline]
-            #[must_use]
-            fn add(self, rhs: Self) -> Self::Output {
-                Self(
-                    self.0
-                        .map_addr(|a| ((a as $int_ty) + (rhs.0.addr() as $int_ty)) as usize),
-                )
-            }
-        }
-        impl core::ops::Sub<Self> for $self_ty {
-            type Output = Self;
-            #[inline]
-            #[must_use]
-            fn sub(self, rhs: Self) -> Self::Output {
-                Self(
-                    self.0
-                        .map_addr(|a| ((a as $int_ty) - (rhs.0.addr() as $int_ty)) as usize),
-                )
-            }
-        }
-        impl core::ops::Mul<Self> for $self_ty {
-            type Output = Self;
-            #[inline]
-            #[must_use]
-            fn mul(self, rhs: Self) -> Self::Output {
-                Self(
-                    self.0
-                        .map_addr(|a| ((a as $int_ty) * (rhs.0.addr() as $int_ty)) as usize),
-                )
-            }
-        }
-        impl core::ops::Div<Self> for $self_ty {
-            type Output = Self;
-            #[inline]
-            #[must_use]
-            fn div(self, rhs: Self) -> Self::Output {
-                Self(
-                    self.0
-                        .map_addr(|a| ((a as $int_ty) / (rhs.0.addr() as $int_ty)) as usize),
-                )
-            }
-        }
-        impl core::ops::Rem<Self> for $self_ty {
-            type Output = Self;
-            #[inline]
-            #[must_use]
-            fn rem(self, rhs: Self) -> Self::Output {
-                Self(
-                    self.0
-                        .map_addr(|a| ((a as $int_ty) % (rhs.0.addr() as $int_ty)) as usize),
-                )
-            }
-        }
-        impl core::ops::BitAnd<Self> for $self_ty {
-            type Output = Self;
-            #[inline]
-            #[must_use]
-            fn bitand(self, rhs: Self) -> Self::Output {
-                Self(
-                    self.0
-                        .map_addr(|a| ((a as $int_ty) & (rhs.0.addr() as $int_ty)) as usize),
-                )
-            }
-        }
-        impl core::ops::BitOr<Self> for $self_ty {
-            type Output = Self;
-            #[inline]
-            #[must_use]
-            fn bitor(self, rhs: Self) -> Self::Output {
-                Self(
-                    self.0
-                        .map_addr(|a| ((a as $int_ty) | (rhs.0.addr() as $int_ty)) as usize),
-                )
-            }
-        }
-        impl core::ops::BitXor<Self> for $self_ty {
-            type Output = Self;
-            #[inline]
-            #[must_use]
-            fn bitxor(self, rhs: Self) -> Self::Output {
-                Self(
-                    self.0
-                        .map_addr(|a| ((a as $int_ty) ^ (rhs.0.addr() as $int_ty)) as usize),
-                )
-            }
-        }
-        impl core::ops::Shl<usize> for $self_ty {
-            type Output = Self;
-            #[inline]
-            #[must_use]
-            fn shl(self, rhs: usize) -> Self::Output {
-                Self(self.0.map_addr(|a| ((a as $int_ty) << rhs) as usize))
-            }
-        }
-        impl core::ops::Shr<usize> for $self_ty {
-            type Output = Self;
-            #[inline]
-            #[must_use]
-            fn shr(self, rhs: usize) -> Self::Output {
-                Self(self.0.map_addr(|a| ((a as $int_ty) >> rhs) as usize))
-            }
-        }
-
-        impl core::ops::Not for $self_ty {
-            type Output = Self;
-            #[inline]
-            #[must_use]
-            fn not(self) -> Self::Output {
-                Self(self.0.map_addr(|a| (!(a as $int_ty)) as usize))
-            }
-        }
-
-        impl core::ops::AddAssign<Self> for $self_ty {
-            #[inline]
-            #[must_use]
-            fn add_assign(&mut self, rhs: Self) {
-                self.0 = self
-                    .0
-                    .map_addr(|a| ((a as $int_ty) + (rhs.0.addr() as $int_ty)) as usize);
-            }
-        }
-        impl core::ops::SubAssign<Self> for $self_ty {
-            #[inline]
-            #[must_use]
-            fn sub_assign(&mut self, rhs: Self) {
-                self.0 = self
-                    .0
-                    .map_addr(|a| ((a as $int_ty) - (rhs.0.addr() as $int_ty)) as usize);
-            }
-        }
-        impl core::ops::MulAssign<Self> for $self_ty {
-            #[inline]
-            #[must_use]
-            fn mul_assign(&mut self, rhs: Self) {
-                self.0 = self
-                    .0
-                    .map_addr(|a| ((a as $int_ty) * (rhs.0.addr() as $int_ty)) as usize);
-            }
-        }
-        impl core::ops::DivAssign<Self> for $self_ty {
-            #[inline]
-            #[must_use]
-            fn div_assign(&mut self, rhs: Self) {
-                self.0 = self
-                    .0
-                    .map_addr(|a| ((a as $int_ty) / (rhs.0.addr() as $int_ty)) as usize);
-            }
-        }
-        impl core::ops::RemAssign<Self> for $self_ty {
-            #[inline]
-            #[must_use]
-            fn rem_assign(&mut self, rhs: Self) {
-                self.0 = self
-                    .0
-                    .map_addr(|a| ((a as $int_ty) % (rhs.0.addr() as $int_ty)) as usize);
-            }
-        }
-        impl core::ops::BitAndAssign<Self> for $self_ty {
-            #[inline]
-            #[must_use]
-            fn bitand_assign(&mut self, rhs: Self) {
-                self.0 = self
-                    .0
-                    .map_addr(|a| ((a as $int_ty) & (rhs.0.addr() as $int_ty)) as usize);
-            }
-        }
-        impl core::ops::BitOrAssign<Self> for $self_ty {
-            #[inline]
-            #[must_use]
-            fn bitor_assign(&mut self, rhs: Self) {
-                self.0 = self
-                    .0
-                    .map_addr(|a| ((a as $int_ty) | (rhs.0.addr() as $int_ty)) as usize);
-            }
-        }
-        impl core::ops::BitXorAssign<Self> for $self_ty {
-            #[inline]
-            #[must_use]
-            fn bitxor_assign(&mut self, rhs: Self) {
-                self.0 = self
-                    .0
-                    .map_addr(|a| ((a as $int_ty) ^ (rhs.0.addr() as $int_ty)) as usize);
-            }
-        }
-        impl core::ops::ShlAssign<usize> for $self_ty {
-            #[inline]
-            #[must_use]
-            fn shl_assign(&mut self, rhs: usize) {
-                self.0 = self.0.map_addr(|a| ((a as $int_ty) << rhs) as usize);
-            }
-        }
-        impl core::ops::ShrAssign<usize> for $self_ty {
-            #[inline]
-            #[must_use]
-            fn shr_assign(&mut self, rhs: usize) {
-                self.0 = self.0.map_addr(|a| ((a as $int_ty) >> rhs) as usize);
-            }
-        }
-
-        impl core::fmt::Display for $self_ty {
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                write!(f, "{}", self.0.addr() as $int_ty)
-            }
-        }
-
-        impl core::fmt::Debug for $self_ty {
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                write!(f, "{:?}", self.0.addr() as $int_ty)
-            }
-        }
-    };
+mod private {
+    pub trait Sealed {}
 }
 
-int_impls!(uptr, usize);
-int_impls!(iptr, isize);
-
-// usize can't be negated
-impl core::ops::Neg for iptr {
-    type Output = Self;
-    #[inline]
-    #[must_use]
-    fn neg(self) -> Self::Output {
-        Self(self.0.map_addr(|a| (-(a as isize)) as usize))
-    }
-}
-
-pub trait Strict<T> {
+pub trait Strict: private::Sealed {
+    type Pointee;
     /// Gets the "address" portion of the pointer.
     ///
     /// This is equivalent to `self as usize`, which semantically discards
@@ -731,7 +388,7 @@ pub trait Strict<T> {
     #[must_use]
     fn addr(self) -> usize
     where
-        T: Sized;
+        Self::Pointee: Sized;
 
     /// Creates a new pointer with the given address.
     ///
@@ -750,7 +407,7 @@ pub trait Strict<T> {
     #[must_use]
     fn with_addr(self, addr: usize) -> Self
     where
-        T: Sized;
+        Self::Pointee: Sized;
 
     /// Creates a new pointer by mapping `self`'s address to a new one.
     ///
@@ -761,24 +418,29 @@ pub trait Strict<T> {
     #[must_use]
     fn map_addr(self, f: impl FnOnce(usize) -> usize) -> Self
     where
-        T: Sized;
+        Self::Pointee: Sized;
 
     #[must_use]
     #[deprecated = "to_bits is incompatible with strict_provenance"]
     #[cfg(feature = "deprecate_problems")]
     fn to_bits(self) -> usize
     where
-        T: Sized;
+        Self::Pointee: Sized;
 
     #[must_use]
     #[deprecated = "from_bits is incompatible with strict_provenance"]
     #[cfg(feature = "deprecate_problems")]
     fn from_bits(bits: usize) -> Self
     where
-        T: Sized;
+        Self::Pointee: Sized;
 }
 
-impl<T> Strict<T> for *mut T {
+impl<T> private::Sealed for *mut T {}
+impl<T> private::Sealed for *const T {}
+
+impl<T> Strict for *mut T {
+    type Pointee = T;
+
     #[must_use]
     #[inline]
     fn addr(self) -> usize
@@ -838,7 +500,9 @@ impl<T> Strict<T> for *mut T {
     }
 }
 
-impl<T> Strict<T> for *const T {
+impl<T> Strict for *const T {
+    type Pointee = T;
+
     #[must_use]
     #[inline]
     fn addr(self) -> usize
@@ -911,3 +575,13 @@ mod test {
         assert_eq!(val, 0);
     }
 }
+
+#[cfg(feature = "uptr")]
+pub mod int;
+#[cfg(feature = "uptr")]
+pub use int::*;
+
+#[cfg(feature = "opaque_fn")]
+pub mod func;
+#[cfg(feature = "opaque_fn")]
+pub use func::*;
