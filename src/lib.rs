@@ -3,7 +3,7 @@
 //! This library provides a stable polyfill for Rust's [Strict Provenance] experiment.
 //!
 //! Mapping to STD APIs:
-//! 
+//!
 //! ```rust ,ignore
 //! // core::ptr (sptr)
 //! pub fn invalid<T>(addr: usize) -> *const T;
@@ -46,7 +46,7 @@
 //! in your Cargo.toml.
 //!
 //! Rust is the canonical source of definitions for these APIs and semantics, but the docs
-//! here will vaguely try to mirror the docs checked into Rust. The current APIs are:
+//! here will vaguely try to mirror the docs checked into Rust.
 //!
 //! The following explanation of the model should also appear at the top of `core::ptr`:
 //!

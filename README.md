@@ -4,7 +4,32 @@
 
 
 
-This library provides a stable polyfill for Rust's [Strict Provenance](https://github.com/rust-lang/rust/issues/95228) experiment.
+This library provides a stable polyfill for Rust's [Strict Provenance] experiment.
+
+Mapping to STD APIs:
+
+```rust ,ignore
+// core::ptr (sptr)
+pub fn invalid<T>(addr: usize) -> *const T;
+pub fn invalid_mut<T>(addr: usize) -> *mut T;
+
+// core::pointer (sptr::Strict)
+pub fn addr(self) -> usize;
+pub fn with_addr(self, addr: usize) -> Self;
+pub fn map_addr(self, f: impl FnOnce(usize) -> usize) -> Self;
+
+// NON-STANDARD EXTENSIONS (feature = uptr)
+sptr::uptr
+sptr::iptr
+
+// NON-STANDARD EXTENSIONS (feature = opaque_fn)
+sptr::OpaqueFn
+
+// DEPRECATED BY THIS MODEL in core::pointer (sptr::Strict)
+// (disable with `default-features = false`)
+pub fn to_bits(self) -> usize;
+pub fn from_bits(usize) -> Self;
+```
 
 Swapping between the two should be as simple as switching between `sptr::` and `ptr::`
 for static functions. For methods, you must import `sptr::Strict` into your module for
@@ -25,21 +50,4 @@ incompatible with strict_provenance. If you don't want this, set `default-featur
 in your Cargo.toml.
 
 Rust is the canonical source of definitions for these APIs and semantics, but the docs
-here will vaguely try to mirror the docs checked into Rust. The current APIs are:
-
-
-```rust ,ignore
-core::ptr (sptr)
-pub fn invalid<T>(addr: usize) -> *const T;
-pub fn invalid_mut<T>(addr: usize) -> *mut T;
-
-// core::pointer (sptr::Strict)
-pub fn addr(self) -> usize;
-pub fn with_addr(self, addr: usize) -> Self;
-pub fn map_addr(self, f: impl FnOnce(usize) -> usize) -> Self;
-
-// DEPRECATED BY THIS MODEL in core::pointer (sptr::Strict)
-// (disable with `default-features = false`)
-pub fn to_bits(self) -> usize;
-pub fn from_bits(usize) -> Self;
-```
+here will vaguely try to mirror the docs checked into Rust.
