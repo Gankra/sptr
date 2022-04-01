@@ -583,7 +583,7 @@ mod test {
 #[cfg(feature = "uptr")]
 pub mod int;
 #[cfg(feature = "uptr")]
-pub use int::*;
+pub use self::int::*;
 
 #[cfg(feature = "opaque_fn")]
 pub mod func;

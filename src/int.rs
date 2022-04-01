@@ -41,28 +41,34 @@ pub struct uptr(*mut ());
 pub struct iptr(*mut ());
 
 macro_rules! int_impls {
-    ($self_ty: ty, $int_ty: ty) => {
+    ($self_ty: ident, $int_ty: ident) => {
         impl $self_ty {
-            pub const MIN: $self_ty = Self::from_int(<$int_ty>::MIN);
-            pub const MAX: $self_ty = Self::from_int(<$int_ty>::MAX);
-            pub const BITS: u32 = <$int_ty>::BITS;
+            // Inherent MIN/MAX requires 1.43
+            // pub const MIN: $self_ty = Self::from_int(<$int_ty>::MIN);
+            // pub const MAX: $self_ty = Self::from_int(<$int_ty>::MAX);
+            pub const MIN: $self_ty = Self::from_int(core::$int_ty::MIN);
+            pub const MAX: $self_ty = Self::from_int(core::$int_ty::MAX);
+
+            // Inherent BITS requires 1.53
+            // pub const BITS: u32 = <$int_ty>::BITS;
+            pub const BITS: u32 = core::mem::size_of::<$int_ty>() as u32 * 8;
 
             #[inline]
             #[must_use]
             pub const fn from_int(val: $int_ty) -> Self {
-                Self(crate::invalid_mut(val as usize))
+                $self_ty(crate::invalid_mut(val as usize))
             }
 
             #[inline]
             #[must_use]
             pub const fn from_ptr_mut<T>(val: *mut T) -> Self {
-                Self(val as *mut ())
+                $self_ty(val as *mut ())
             }
 
             #[inline]
             #[must_use]
             pub const fn from_ptr<T>(val: *const T) -> Self {
-                Self(val as *const () as *mut ())
+                $self_ty(val as *const () as *mut ())
             }
 
             pub const fn to_ptr(self) -> *mut () {
@@ -72,7 +78,7 @@ macro_rules! int_impls {
             #[inline]
             #[must_use]
             pub fn wrapping_add(self, rhs: Self) -> Self {
-                Self(
+                $self_ty(
                     self.0.map_addr(|a| {
                         ((a as $int_ty).wrapping_add(rhs.0.addr() as $int_ty)) as usize
                     }),
@@ -81,7 +87,7 @@ macro_rules! int_impls {
             #[inline]
             #[must_use]
             pub fn wrapping_sub(self, rhs: Self) -> Self {
-                Self(
+                $self_ty(
                     self.0.map_addr(|a| {
                         ((a as $int_ty).wrapping_sub(rhs.0.addr() as $int_ty)) as usize
                     }),
@@ -90,7 +96,7 @@ macro_rules! int_impls {
             #[inline]
             #[must_use]
             pub fn wrapping_mul(self, rhs: Self) -> Self {
-                Self(
+                $self_ty(
                     self.0.map_addr(|a| {
                         ((a as $int_ty).wrapping_mul(rhs.0.addr() as $int_ty)) as usize
                     }),
@@ -99,7 +105,7 @@ macro_rules! int_impls {
             #[inline]
             #[must_use]
             pub fn wrapping_div(self, rhs: Self) -> Self {
-                Self(
+                $self_ty(
                     self.0.map_addr(|a| {
                         ((a as $int_ty).wrapping_div(rhs.0.addr() as $int_ty)) as usize
                     }),
@@ -111,21 +117,21 @@ macro_rules! int_impls {
             #[inline]
             #[must_use]
             fn from(val: $int_ty) -> Self {
-                Self(crate::invalid_mut(val as usize))
+                $self_ty(crate::invalid_mut(val as usize))
             }
         }
         impl<T> From<*mut T> for $self_ty {
             #[inline]
             #[must_use]
             fn from(val: *mut T) -> Self {
-                Self(val as *mut ())
+                $self_ty(val as *mut ())
             }
         }
         impl<T> From<*const T> for $self_ty {
             #[inline]
             #[must_use]
             fn from(val: *const T) -> Self {
-                Self(val as *const () as *mut ())
+                $self_ty(val as *const () as *mut ())
             }
         }
 
@@ -134,7 +140,7 @@ macro_rules! int_impls {
             #[inline]
             #[must_use]
             fn add(self, rhs: Self) -> Self::Output {
-                Self(
+                $self_ty(
                     self.0
                         .map_addr(|a| ((a as $int_ty) + (rhs.0.addr() as $int_ty)) as usize),
                 )
@@ -145,7 +151,7 @@ macro_rules! int_impls {
             #[inline]
             #[must_use]
             fn sub(self, rhs: Self) -> Self::Output {
-                Self(
+                $self_ty(
                     self.0
                         .map_addr(|a| ((a as $int_ty) - (rhs.0.addr() as $int_ty)) as usize),
                 )
@@ -156,7 +162,7 @@ macro_rules! int_impls {
             #[inline]
             #[must_use]
             fn mul(self, rhs: Self) -> Self::Output {
-                Self(
+                $self_ty(
                     self.0
                         .map_addr(|a| ((a as $int_ty) * (rhs.0.addr() as $int_ty)) as usize),
                 )
@@ -167,7 +173,7 @@ macro_rules! int_impls {
             #[inline]
             #[must_use]
             fn div(self, rhs: Self) -> Self::Output {
-                Self(
+                $self_ty(
                     self.0
                         .map_addr(|a| ((a as $int_ty) / (rhs.0.addr() as $int_ty)) as usize),
                 )
@@ -178,7 +184,7 @@ macro_rules! int_impls {
             #[inline]
             #[must_use]
             fn rem(self, rhs: Self) -> Self::Output {
-                Self(
+                $self_ty(
                     self.0
                         .map_addr(|a| ((a as $int_ty) % (rhs.0.addr() as $int_ty)) as usize),
                 )
@@ -189,7 +195,7 @@ macro_rules! int_impls {
             #[inline]
             #[must_use]
             fn bitand(self, rhs: Self) -> Self::Output {
-                Self(
+                $self_ty(
                     self.0
                         .map_addr(|a| ((a as $int_ty) & (rhs.0.addr() as $int_ty)) as usize),
                 )
@@ -200,7 +206,7 @@ macro_rules! int_impls {
             #[inline]
             #[must_use]
             fn bitor(self, rhs: Self) -> Self::Output {
-                Self(
+                $self_ty(
                     self.0
                         .map_addr(|a| ((a as $int_ty) | (rhs.0.addr() as $int_ty)) as usize),
                 )
@@ -211,7 +217,7 @@ macro_rules! int_impls {
             #[inline]
             #[must_use]
             fn bitxor(self, rhs: Self) -> Self::Output {
-                Self(
+                $self_ty(
                     self.0
                         .map_addr(|a| ((a as $int_ty) ^ (rhs.0.addr() as $int_ty)) as usize),
                 )
@@ -222,7 +228,7 @@ macro_rules! int_impls {
             #[inline]
             #[must_use]
             fn shl(self, rhs: usize) -> Self::Output {
-                Self(self.0.map_addr(|a| ((a as $int_ty) << rhs) as usize))
+                $self_ty(self.0.map_addr(|a| ((a as $int_ty) << rhs) as usize))
             }
         }
         impl core::ops::Shr<usize> for $self_ty {
@@ -230,7 +236,7 @@ macro_rules! int_impls {
             #[inline]
             #[must_use]
             fn shr(self, rhs: usize) -> Self::Output {
-                Self(self.0.map_addr(|a| ((a as $int_ty) >> rhs) as usize))
+                $self_ty(self.0.map_addr(|a| ((a as $int_ty) >> rhs) as usize))
             }
         }
 
@@ -239,7 +245,7 @@ macro_rules! int_impls {
             #[inline]
             #[must_use]
             fn not(self) -> Self::Output {
-                Self(self.0.map_addr(|a| (!(a as $int_ty)) as usize))
+                $self_ty(self.0.map_addr(|a| (!(a as $int_ty)) as usize))
             }
         }
 
@@ -353,6 +359,6 @@ impl core::ops::Neg for iptr {
     #[inline]
     #[must_use]
     fn neg(self) -> Self::Output {
-        Self(self.0.map_addr(|a| (-(a as isize)) as usize))
+        iptr(self.0.map_addr(|a| (-(a as isize)) as usize))
     }
 }
