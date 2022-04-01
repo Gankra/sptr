@@ -1,4 +1,5 @@
 #![allow(unstable_name_collisions)]
+#![no_std]
 
 //! This library provides a stable polyfill for Rust's [Strict Provenance] experiment.
 //!
@@ -466,8 +467,10 @@ impl<T> Strict for *mut T {
         let dest_addr = addr as isize;
         let offset = dest_addr.wrapping_sub(self_addr);
 
-        // This is the canonical desugarring of this operation
-        self.cast::<u8>().wrapping_offset(offset).cast::<T>()
+        // This is the canonical desugarring of this operation,
+        // but `pointer::cast` was only stabilized in 1.38.
+        // self.cast::<u8>().wrapping_offset(offset).cast::<T>()
+        (self as *mut u8).wrapping_offset(offset) as *mut T
     }
 
     #[must_use]
@@ -528,8 +531,10 @@ impl<T> Strict for *const T {
         let dest_addr = addr as isize;
         let offset = dest_addr.wrapping_sub(self_addr);
 
-        // This is the canonical desugarring of this operation
-        self.cast::<u8>().wrapping_offset(offset).cast::<T>()
+        // This is the canonical desugarring of this operation,
+        // but `pointer::cast` was only stabilized in 1.38.
+        // self.cast::<u8>().wrapping_offset(offset).cast::<T>()
+        (self as *const u8).wrapping_offset(offset) as *const T
     }
 
     #[must_use]
@@ -579,9 +584,9 @@ mod test {
 #[cfg(feature = "uptr")]
 pub mod int;
 #[cfg(feature = "uptr")]
-pub use int::*;
+pub use self::int::*;
 
 #[cfg(feature = "opaque_fn")]
 pub mod func;
 #[cfg(feature = "opaque_fn")]
-pub use func::*;
+pub use self::func::*;
