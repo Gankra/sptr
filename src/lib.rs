@@ -1,4 +1,5 @@
 #![allow(unstable_name_collisions)]
+#![no_std]
 
 //! This library provides a stable polyfill for Rust's [Strict Provenance] experiment.
 //!
