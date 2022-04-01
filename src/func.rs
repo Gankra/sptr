@@ -27,7 +27,7 @@ impl OpaqueFnPtr {
             core::mem::align_of::<OpaqueFnPtr>()
         );
 
-        Self(core::mem::transmute_copy(&func))
+        OpaqueFnPtr(core::mem::transmute_copy(&func))
     }
 
     /// Create a `fn` from an OpaqueFnPtr.

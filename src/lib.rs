@@ -588,4 +588,4 @@ pub use self::int::*;
 #[cfg(feature = "opaque_fn")]
 pub mod func;
 #[cfg(feature = "opaque_fn")]
-pub use func::*;
+pub use self::func::*;
