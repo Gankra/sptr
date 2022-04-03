@@ -57,7 +57,7 @@
 //! interpretation of provenance. It's ok if your code doesn't strictly conform to it.**
 //!
 //! [Strict Provenance][] is an experimental set of APIs that help tools that try
-//! to validate the memory-safety of your program's execution. Notably this includes [miri][]
+//! to validate the memory-safety of your program's execution. Notably this includes [Miri][]
 //! and [CHERI][], which can detect when you access out of bounds memory or otherwise violate
 //! Rust's memory model.
 //!
@@ -123,7 +123,7 @@
 //!
 //! The strict provenance experiment is mostly only interested in exploring stricter *spatial*
 //! provenance. In this sense it can be thought of as a subset of the more ambitious and
-//! formal [Stacked Borrows][] research project, which is what tools like [miri][] are based on.
+//! formal [Stacked Borrows][] research project, which is what tools like [Miri][] are based on.
 //! In particular, Stacked Borrows is necessary to properly describe what borrows are allowed
 //! to do and when they become invalidated. This necessarily involves much more complex
 //! *temporal* reasoning than simply identifying allocations. Adjusting APIs and code
@@ -157,7 +157,8 @@
 //! Under Strict Provenance, a usize *cannot* accurately represent a pointer, and converting from
 //! a pointer to a usize is generally an operation which *only* extracts the address. It is
 //! therefore *impossible* to construct a valid pointer from a usize because there is no way
-//! to restore the address-space and provenance.
+//! to restore the address-space and provenance. In other words, pointer-integer-pointer
+//! roundtrips are not possible (in the sense that the resulting pointer is not dereferencable).
 //!
 //! The key insight to making this model *at all* viable is the [`with_addr`][] method:
 //!
@@ -181,10 +182,10 @@
 //! and then immediately converting back to a pointer. To make this use case more ergonomic,
 //! we provide the [`map_addr`][] method.
 //!
-//! To help make it clear that code is "following" Strict Provenance semantics, we also
-//! provide an [`addr`][] method which is currently equivalent to `ptr as usize`. In the
-//! future we may provide a lint for pointer<->integer casts to help you audit if your
-//! code conforms to strict provenance.
+//! To help make it clear that code is "following" Strict Provenance semantics, we also provide an
+//! [`addr`][] method which promises that the returned address is not part of a
+//! pointer-usize-pointer roundtrip. In the future we may provide a lint for pointer<->integer
+//! casts to help you audit if your code conforms to strict provenance.
 //!
 //!
 //! ## Using Strict Provenance
@@ -299,6 +300,42 @@
 //!   For instance, ARM explicitly supports high-bit tagging, and so CHERI on ARM inherits
 //!   that and should support it.
 //!
+//! ## Pointer-usize-pointer roundtrips and 'exposed' provenance
+//!
+//! **This section is *non-normative* and is part of the [Strict Provenance] experiment.**
+//!
+//! As discussed above, pointer-usize-pointer roundtrips are not possible under [Strict Provenance].
+//! However, there exists legacy Rust code that is full of such roundtrips, and legacy platform APIs
+//! regularly assume that `usize` can capture all the information that makes up a pointer. There
+//! also might be code that cannot be ported to Strict Provenance (which is something we would [like
+//! to hear about][Strict Provenance]).
+//!
+//! For situations like this, there is a fallback plan, a way to 'opt out' of Strict Provenance.
+//! However, note that this makes your code a lot harder to specify, and the code will not work
+//! (well) with tools like [Miri] and [CHERI].
+//!
+//! This fallback plan is provided by the [`expose_addr`] and [`from_exposed_addr`] methods (which
+//! are equivalent to `as` casts between pointers and integers). [`expose_addr`] is a lot like
+//! [`addr`], but additionally adds the provenance of the pointer to a global list of 'exposed'
+//! provenances. (This list is purely conceptual, it exists for the purpose of specifcying Rust but
+//! is not materialized in actual executions, except in tools like [Miri].) [`from_exposed_addr`]
+//! can be used to construct a pointer with one of these previously 'exposed' provenances.
+//! [`from_exposed_addr`] takes only `addr: usize` as arguments, so unlike in [`with_addr`] there is
+//! no indication of what the correct provenance for the returned pointer is -- and that is exactly
+//! what makes pointer-usize-pointer roundtrips so tricky to rigorously specify! There is no
+//! algorithm that decides which provenance will be used. You can think of this as "guessing" the
+//! right provenance, and the guess will be "maximally in your favor", in the sense that if there is
+//! any way to avoid undefined behavior, then that is the guess that will be taken. However, if
+//! there is *no* previously 'exposed' provenance that justifies the way the returned pointer will
+//! be used, the program has undefined behavior.
+//!
+//! Using [`expose_addr`] or [`from_exposed_addr`] (or the equivalent `as` casts) means that code is
+//! *not* following Strict Provenance rules. The goal of the Strict Provenance experiment is to
+//! determine whether it is possible to use Rust without [`expose_addr`] and [`from_exposed_addr`].
+//! If this is successful, it would be a major win for avoiding specification complexity and to
+//! facilitate adoption of tools like [CHERI] and [Miri] that can be a big help in increasing the
+//! confidence in (unsafe) Rust code.
+//!
 //!
 //! [aliasing]: https://doc.rust-lang.org/nightly/nomicon/aliasing.html
 //! [book]: https://doc.rust-lang.org/nightly/book/ch19-01-unsafe-rust.html#dereferencing-a-raw-pointer
@@ -311,7 +348,9 @@
 //! [`map_addr`]: Strict::map_addr
 //! [`addr`]: Strict::addr
 //! [`ptr::invalid`]: crate::invalid
-//! [miri]: https://github.com/rust-lang/miri
+//! [`expose_addr`]: Strict::expose_addr
+//! [`from_exposed_addr`]: crate::from_exposed_addr
+//! [Miri]: https://github.com/rust-lang/miri
 //! [CHERI]: https://www.cl.cam.ac.uk/research/security/ctsrd/cheri/
 //! [Strict Provenance]: https://github.com/rust-lang/rust/issues/95228
 //! [Stacked Borrows]: https://plv.mpi-sws.org/rustbelt/stacked-borrows/
@@ -366,6 +405,76 @@ pub const fn invalid_mut<T>(addr: usize) -> *mut T {
     addr as *mut T
 }
 
+/// Convert an address back to a pointer, picking up a previously 'exposed' provenance.
+///
+/// This is equivalent to `addr as ptr`. The provenance of the returned pointer is that of *any*
+/// pointer that was previously passed to [`expose_addr`][pointer::expose_addr]. If there is no
+/// previously 'exposed' provenance that justifies the way this pointer will be used, the
+/// program has undefined behavior. Note that there is no algorithm that decides which
+/// provenance will be used. You can think of this as "guessing" the right provenance, and the
+/// guess will be "maximally in your favor", in the sense that if there is any way to avoid
+/// undefined behavior, then that is the guess that will be taken.
+///
+/// On platforms with multiple address spaces, it is your responsibility to ensure the the
+/// address makes sense in the address space that this pointer will be used with.
+///
+/// Using this method means that code is *not* following strict provenance rules. "Guessing" a
+/// suitable provenance complicates specification and reasoning and may not be supported by
+/// tools that help you to stay conformant with the Rust memory model, so it is recommended to
+/// use [`with_addr`][pointer::with_addr] wherever possible.
+///
+/// On most platforms this will produce a value with the same bytes as the address. Platforms
+/// which need to store additional information in a pointer may not support this operation,
+/// since it is generally not possible to actually *compute* which provenance the returned
+/// pointer has to pick up.
+///
+/// This API and its claimed semantics are part of the Strict Provenance experiment, see the
+/// [module documentation][crate::ptr] for details.
+#[must_use]
+#[inline]
+pub fn from_exposed_addr<T>(addr: usize) -> *const T
+where
+    T: Sized,
+{
+    // FIXME(strict_provenance_magic): I am magic and should be a compiler intrinsic.
+    addr as *const T
+}
+
+/// Convert an address back to a mutable pointer, picking up a previously 'exposed' provenance.
+///
+/// This is equivalent to `addr as ptr`. The provenance of the returned pointer is that of *any*
+/// pointer that was previously passed to [`expose_addr`][pointer::expose_addr]. If there is no
+/// previously 'exposed' provenance that justifies the way this pointer will be used, the
+/// program has undefined behavior. Note that there is no algorithm that decides which
+/// provenance will be used. You can think of this as "guessing" the right provenance, and the
+/// guess will be "maximally in your favor", in the sense that if there is any way to avoid
+/// undefined behavior, then that is the guess that will be taken.
+///
+/// On platforms with multiple address spaces, it is your responsibility to ensure the the
+/// address makes sense in the address space that this pointer will be used with.
+///
+/// Using this method means that code is *not* following strict provenance rules. "Guessing" a
+/// suitable provenance complicates specification and reasoning and may not be supported by
+/// tools that help you to stay conformant with the Rust memory model, so it is recommended to
+/// use [`with_addr`][pointer::with_addr] wherever possible.
+///
+/// On most platforms this will produce a value with the same bytes as the address. Platforms
+/// which need to store additional information in a pointer may not support this operation,
+/// since it is generally not possible to actually *compute* which provenance the returned
+/// pointer has to pick up.
+///
+/// This API and its claimed semantics are part of the Strict Provenance experiment, see the
+/// [module documentation][crate::ptr] for details.
+#[must_use]
+#[inline]
+pub fn from_exposed_addr_mut<T>(addr: usize) -> *mut T
+where
+    T: Sized,
+{
+    // FIXME(strict_provenance_magic): I am magic and should be a compiler intrinsic.
+    addr as *mut T
+}
+
 mod private {
     pub trait Sealed {}
 }
@@ -374,9 +483,17 @@ pub trait Strict: private::Sealed {
     type Pointee;
     /// Gets the "address" portion of the pointer.
     ///
-    /// This is equivalent to `self as usize`, which semantically discards
-    /// *provenance* and *address-space* information. To properly restore that information,
-    /// use [`with_addr`][Strict::with_addr] or [`map_addr`][Strict::map_addr].
+    /// This is similar to `self as usize`, which semantically discards *provenance* and
+    /// *address-space* information. However, unlike `self as usize`, it is not possible to cast the
+    /// returned address back to a dereferencable pointer via `as *const T`. To properly restore the
+    /// lost information and obtain a dereferencable pointer, use [`with_addr`][Strict::with_addr]
+    /// or [`map_addr`][Strict::map_addr].
+    ///
+    /// If using those APIs is not possible because there is no way to preserve a pointer with the
+    /// required provenance, use [`expose_addr`][Strict::expose_addr] and
+    /// [`from_exposed_addr`][from_exposed_addr] instead. However, note that this makes
+    /// your code less portable and less amenable to tools that check for compliance with the Rust
+    /// memory model.
     ///
     /// On most platforms this will produce a value with the same bytes as the original
     /// pointer, because all the bytes are dedicated to describing the address.
@@ -384,10 +501,40 @@ pub trait Strict: private::Sealed {
     /// perform a change of representation to produce a value containing only the address
     /// portion of the pointer. What that means is up to the platform to define.
     ///
-    /// This API and its claimed semantics are part of the Strict Provenance experiment,
-    /// see the [module documentation][crate] for details.
+    /// This API and its claimed semantics are part of the Strict Provenance experiment, and as such
+    /// might change in the future (including possibly weakening this so it becomes wholly
+    /// equivalent to `self as usize`). See the [module documentation][crate] for details.
     #[must_use]
     fn addr(self) -> usize
+    where
+        Self::Pointee: Sized;
+
+    /// Gets the "address" portion of the pointer, and 'exposes' the "provenance" part for future
+    /// use in pointer-to-integer casts.
+    ///
+    /// This is equivalent to `self as usize`, which semantically discards *provenance* and
+    /// *address-space* information. Furthermore, this (like the `as` cast) has the implicit
+    /// side-effect of marking the provenance as 'exposed', so on platforms that support it you can
+    /// later call [`from_exposed_addr`][] to reconstitute the original pointer including its
+    /// provenance. (Reconstructing address space information, if required, is your responsibility.)
+    ///
+    /// Using this method means that code is *not* following Strict Provenance rules. Supporting
+    /// [`from_exposed_addr`][] complicates specification and reasoning and may not be supported by
+    /// tools that help you to stay conformant with the Rust memory model, so it is recommended to
+    /// use [`addr`][Strict::addr] wherever possible.
+    ///
+    /// On most platforms this will produce a value with the same bytes as the original pointer,
+    /// because all the bytes are dedicated to describing the address. Platforms which need to store
+    /// additional information in the pointer may not support this operation, since the 'expose'
+    /// side-effect which is required for [`from_exposed_addr`][] to work is typically not
+    /// available.
+    ///
+    /// This API and its claimed semantics are part of the Strict Provenance experiment, see the
+    /// [module documentation][crate] for details.
+    ///
+    /// [`from_exposed_addr`]: crate::from_exposed_addr
+    #[must_use]
+    fn expose_addr(self) -> usize
     where
         Self::Pointee: Sized;
 
@@ -454,6 +601,16 @@ impl<T> Strict for *mut T {
 
     #[must_use]
     #[inline]
+    fn expose_addr(self) -> usize
+    where
+        T: Sized,
+    {
+        // FIXME(strict_provenance_magic): I am magic and should be a compiler intrinsic.
+        self as usize
+    }
+
+    #[must_use]
+    #[inline]
     fn with_addr(self, addr: usize) -> Self
     where
         T: Sized,
@@ -509,6 +666,16 @@ impl<T> Strict for *const T {
     #[must_use]
     #[inline]
     fn addr(self) -> usize
+    where
+        T: Sized,
+    {
+        // FIXME(strict_provenance_magic): I am magic and should be a compiler intrinsic.
+        self as usize
+    }
+
+    #[must_use]
+    #[inline]
+    fn expose_addr(self) -> usize
     where
         T: Sized,
     {
