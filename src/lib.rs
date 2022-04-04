@@ -3,32 +3,46 @@
 
 //! This library provides a stable polyfill for Rust's [Strict Provenance] experiment.
 //!
-//! Mapping to STD APIs:
+//! # Mapping to STD APIs:
 //!
-//! ```rust ,ignore
-//! // core::ptr (sptr)
-//! pub fn invalid<T>(addr: usize) -> *const T;
-//! pub fn invalid_mut<T>(addr: usize) -> *mut T;
+//! This crate "overlays" a bunch of unstable std apis, here are the mappings:
 //!
-//! // core::pointer (sptr::Strict)
-//! pub fn addr(self) -> usize;
-//! pub fn with_addr(self, addr: usize) -> Self;
-//! pub fn map_addr(self, f: impl FnOnce(usize) -> usize) -> Self;
+//! ## core::ptr (sptr)
 //!
-//! // NON-STANDARD EXTENSIONS (feature = uptr)
-//! sptr::uptr
-//! sptr::iptr
+//! * `pub fn `[`invalid`]`<T>(addr: usize) -> *const T;`
+//! * `pub fn `[`invalid_mut`]`<T>(addr: usize) -> *mut T;`
+//! * `pub fn `[`from_exposed_addr`]`<T>(addr: usize) -> *mut T;`
+//! * `pub fn `[`from_exposed_addr_mut`]`<T>(addr: usize) -> *mut T;`
 //!
-//! // NON-STANDARD EXTENSIONS (feature = opaque_fn)
-//! sptr::OpaqueFn
 //!
-//! // DEPRECATED BY THIS MODEL in core::pointer (sptr::Strict)
-//! // (disable with `default-features = false`)
-//! pub fn to_bits(self) -> usize;
-//! pub fn from_bits(usize) -> Self;
-//! ```
+//! ## core::pointer (sptr::Strict)
 //!
-//! Swapping between the two should be as simple as switching between `sptr::` and `ptr::`
+//! * `pub fn `[`addr`]`(self) -> usize;`
+//! * `pub fn `[`expose_addr`]`(self) -> usize;`
+//! * `pub fn `[`with_addr`]`(self, addr: usize) -> Self;`
+//! * `pub fn `[`map_addr`]`(self, f: impl FnOnce(usize) -> usize) -> Self;`
+//!
+//!
+//! ## NON-STANDARD EXTENSIONS (feature = uptr)
+//!
+//! * `sptr::`[`uptr`]
+//! * `sptr::`[`iptr`]
+//!
+//!
+//! ## NON-STANDARD EXTENSIONS (feature = opaque_fn)
+//!
+//! * `sptr::`[`OpaqueFnPtr`]
+//!
+//!
+//! ## DEPRECATED BY THIS MODEL in (sptr::Strict) (disable with `default-features = false`)
+//!
+//! * `pub fn `[`to_bits`]`(self) -> usize;`
+//! * `pub fn `[`from_bits`]`(usize) -> Self;`
+//!
+//!
+//! # Applying The Overlay
+//!
+//! Swapping between sptr and core::ptr should be as simple as switching between `sptr::` and `ptr::`
 //! for static functions. For methods, you must import `sptr::Strict` into your module for
 //! the extension trait's methods to overlay std. The compiler will (understandably)
 //! complain that you are overlaying std, so you will need to also silence that as
@@ -348,6 +362,8 @@
 //! [`map_addr`]: Strict::map_addr
 //! [`addr`]: Strict::addr
 //! [`ptr::invalid`]: crate::invalid
+//! [`to_bits`]: Strict::to_bits
+//! [`from_bits`]: Strict::from_bits
 //! [`expose_addr`]: Strict::expose_addr
 //! [`from_exposed_addr`]: crate::from_exposed_addr
 //! [Miri]: https://github.com/rust-lang/miri
@@ -751,9 +767,11 @@ mod test {
 #[cfg(feature = "uptr")]
 pub mod int;
 #[cfg(feature = "uptr")]
-pub use self::int::*;
+pub use self::int::iptr;
+#[cfg(feature = "uptr")]
+pub use self::int::uptr;
 
 #[cfg(feature = "opaque_fn")]
 pub mod func;
 #[cfg(feature = "opaque_fn")]
-pub use self::func::*;
+pub use self::func::OpaqueFnPtr;
