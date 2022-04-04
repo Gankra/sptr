@@ -3,7 +3,24 @@
 /// The `void*` equivalent for a function pointer, for when you need to handle "some fn".
 ///
 /// Some platforms (WASM, AVR) have non-uniform representations for "code" and "data" pointers.
-/// Rust
+/// Such platforms are referred to as "Harvard Architectures".
+///
+/// Rust does not have a good way for talking about "some" function pointer, so it's pretty
+/// common to cast to a usize or a raw pointer to make it easier. The entire point of strict
+/// provenance is to make you not do usize casts, so obviously we're not a fan of that. But the
+/// other approach *also* isn't great because
+/// [Oxford Casts Are A Mess](https://github.com/rust-lang/rust/issues/95489).
+///
+/// So really you *want* to stay in "definitely doing function pointers", which means you want
+/// a proper opaque function pointer type. This type *attempts* to be that but is honestly
+/// not very good at it, because it immediately runs into the exact problem it's trying to solve:
+/// Rust makes it really hard to talk about "some" function pointer, so we can't actually
+/// describe its interface!
+///
+/// This really needs proper language support.
+///
+/// (In the meantime, `func as usize` and `usize as func` are genuinely the less evil casts
+/// here! Don't do Oxford Casts if you want your code to be maximally portable!)
 #[repr(transparent)]
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct OpaqueFnPtr(fn() -> ());
