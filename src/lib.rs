@@ -323,7 +323,7 @@
 //! This fallback plan is provided by the [`expose_addr`] and [`from_exposed_addr`] methods (which
 //! are equivalent to `as` casts between pointers and integers). [`expose_addr`] is a lot like
 //! [`addr`], but additionally adds the provenance of the pointer to a global list of 'exposed'
-//! provenances. (This list is purely conceptual, it exists for the purpose of specifcying Rust but
+//! provenances. (This list is purely conceptual, it exists for the purpose of specifying Rust but
 //! is not materialized in actual executions, except in tools like [Miri].) [`from_exposed_addr`]
 //! can be used to construct a pointer with one of these previously 'exposed' provenances.
 //! [`from_exposed_addr`] takes only `addr: usize` as arguments, so unlike in [`with_addr`] there is
@@ -490,10 +490,10 @@ pub trait Strict: private::Sealed {
     /// Gets the "address" portion of the pointer.
     ///
     /// This is similar to `self as usize`, which semantically discards *provenance* and
-    /// *address-space* information. However, unlike `self as usize`, it is not possible to cast the
-    /// returned address back to a dereferencable pointer via `as *const T`. To properly restore the
-    /// lost information and obtain a dereferencable pointer, use [`with_addr`][Strict::with_addr]
-    /// or [`map_addr`][Strict::map_addr].
+    /// *address-space* information. However, unlike `self as usize`, casting the returned address
+    /// back to a pointer yields [`invalid`][], which is undefined behavior to dereference. To
+    /// properly restore the lost information and obtain a dereferencable pointer, use
+    /// [`with_addr`][pointer::with_addr] or [`map_addr`][pointer::map_addr].
     ///
     /// If using those APIs is not possible because there is no way to preserve a pointer with the
     /// required provenance, use [`expose_addr`][Strict::expose_addr] and
