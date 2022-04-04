@@ -23,21 +23,13 @@
 //! * `pub fn `[`map_addr`]`(self, f: impl FnOnce(usize) -> usize) -> Self;`
 //!
 //!
-//! ## NON-STANDARD EXTENSIONS (feature = uptr)
+//! ## NON-STANDARD EXTENSIONS (disabled by default, use at your own risk)
 //!
-//! * `sptr::`[`uptr`]
-//! * `sptr::`[`iptr`]
-//!
-//!
-//! ## NON-STANDARD EXTENSIONS (feature = opaque_fn)
-//!
-//! * `sptr::`[`OpaqueFnPtr`]
+//! * `sptr::`[`uptr`] (feature = uptr)
+//! * `sptr::`[`iptr`] (feature = uptr)
+//! * `sptr::`[`OpaqueFnPtr`] (feature = opaque_fn)
 //!
 //!
-//! ## DEPRECATED BY THIS MODEL in (sptr::Strict) (disable with `default-features = false`)
-//!
-//! * `pub fn `[`to_bits`]`(self) -> usize;`
-//! * `pub fn `[`from_bits`]`(usize) -> Self;`
 //!
 //!
 //! # Applying The Overlay
@@ -362,8 +354,6 @@
 //! [`map_addr`]: Strict::map_addr
 //! [`addr`]: Strict::addr
 //! [`ptr::invalid`]: crate::invalid
-//! [`to_bits`]: Strict::to_bits
-//! [`from_bits`]: Strict::from_bits
 //! [`expose_addr`]: Strict::expose_addr
 //! [`from_exposed_addr`]: crate::from_exposed_addr
 //! [Miri]: https://github.com/rust-lang/miri
@@ -583,20 +573,6 @@ pub trait Strict: private::Sealed {
     fn map_addr(self, f: impl FnOnce(usize) -> usize) -> Self
     where
         Self::Pointee: Sized;
-
-    #[must_use]
-    #[deprecated = "to_bits is incompatible with strict_provenance"]
-    #[cfg(feature = "deprecate_problems")]
-    fn to_bits(self) -> usize
-    where
-        Self::Pointee: Sized;
-
-    #[must_use]
-    #[deprecated = "from_bits is incompatible with strict_provenance"]
-    #[cfg(feature = "deprecate_problems")]
-    fn from_bits(bits: usize) -> Self
-    where
-        Self::Pointee: Sized;
 }
 
 impl<T> private::Sealed for *mut T {}
@@ -654,26 +630,6 @@ impl<T> Strict for *mut T {
     {
         self.with_addr(f(self.addr()))
     }
-
-    #[must_use]
-    #[inline]
-    #[cfg(feature = "deprecate_problems")]
-    fn to_bits(self) -> usize
-    where
-        T: Sized,
-    {
-        self as usize
-    }
-
-    #[must_use]
-    #[inline]
-    #[cfg(feature = "deprecate_problems")]
-    fn from_bits(bits: usize) -> Self
-    where
-        T: Sized,
-    {
-        bits as Self
-    }
 }
 
 impl<T> Strict for *const T {
@@ -728,26 +684,6 @@ impl<T> Strict for *const T {
     {
         self.with_addr(f(self.addr()))
     }
-
-    #[must_use]
-    #[inline]
-    #[cfg(feature = "deprecate_problems")]
-    fn to_bits(self) -> usize
-    where
-        T: Sized,
-    {
-        self as usize
-    }
-
-    #[must_use]
-    #[inline]
-    #[cfg(feature = "deprecate_problems")]
-    fn from_bits(bits: usize) -> Self
-    where
-        T: Sized,
-    {
-        bits as Self
-    }
 }
 
 #[cfg(test)]
@@ -756,11 +692,34 @@ mod test {
     use crate::Strict;
 
     #[test]
-    fn test_deprecation() {
+    fn test_overlay() {
+        let null_ptr = core::ptr::null_mut::<u8>();
         let ptr = crate::invalid_mut::<u8>(0);
-        let val = ptr.to_bits();
-        let _other = <*mut u8>::from_bits(0);
-        assert_eq!(val, 0);
+        assert_eq!(ptr, null_ptr);
+
+        let addr = ptr.addr();
+        assert_eq!(addr, ptr as usize);
+
+        let new_ptr = ptr.map_addr(|a| a + 1);
+        assert_eq!(new_ptr, ptr.wrapping_offset(1));
+
+        let new_ptr = ptr.with_addr(3);
+        assert_eq!(new_ptr, 3 as *mut u8);
+
+        let mut x = 7u32;
+        let x_ref = &mut x;
+        let x_ptr = x_ref as *mut u32;
+        let x_addr = x_ptr.expose_addr();
+        let x_new_ptr = crate::from_exposed_addr_mut::<u32>(x_addr);
+
+        unsafe {
+            *x_new_ptr *= 3;
+            *x_ptr *= 5;
+            *x_ref *= 13;
+            x *= 17;
+        }
+
+        assert_eq!(x, 7 * 3 * 5 * 13 * 17);
     }
 }
 
