@@ -407,21 +407,21 @@ pub const fn invalid_mut<T>(addr: usize) -> *mut T {
 
 /// Convert an address back to a pointer, picking up a previously 'exposed' provenance.
 ///
-/// This is equivalent to `addr as ptr`. The provenance of the returned pointer is that of *any*
-/// pointer that was previously passed to [`expose_addr`][pointer::expose_addr]. If there is no
-/// previously 'exposed' provenance that justifies the way this pointer will be used, the
-/// program has undefined behavior. Note that there is no algorithm that decides which
-/// provenance will be used. You can think of this as "guessing" the right provenance, and the
-/// guess will be "maximally in your favor", in the sense that if there is any way to avoid
-/// undefined behavior, then that is the guess that will be taken.
+/// This is equivalent to `addr as *const T`. The provenance of the returned pointer is that of *any*
+/// pointer that was previously passed to [`expose_addr`][Strict::expose_addr] or a `ptr as usize`
+/// cast. If there is no previously 'exposed' provenance that justifies the way this pointer will be
+/// used, the program has undefined behavior. Note that there is no algorithm that decides which
+/// provenance will be used. You can think of this as "guessing" the right provenance, and the guess
+/// will be "maximally in your favor", in the sense that if there is any way to avoid undefined
+/// behavior, then that is the guess that will be taken.
 ///
-/// On platforms with multiple address spaces, it is your responsibility to ensure the the
+/// On platforms with multiple address spaces, it is your responsibility to ensure that the
 /// address makes sense in the address space that this pointer will be used with.
 ///
 /// Using this method means that code is *not* following strict provenance rules. "Guessing" a
 /// suitable provenance complicates specification and reasoning and may not be supported by
 /// tools that help you to stay conformant with the Rust memory model, so it is recommended to
-/// use [`with_addr`][pointer::with_addr] wherever possible.
+/// use [`with_addr`][Strict::with_addr] wherever possible.
 ///
 /// On most platforms this will produce a value with the same bytes as the address. Platforms
 /// which need to store additional information in a pointer may not support this operation,
@@ -429,7 +429,7 @@ pub const fn invalid_mut<T>(addr: usize) -> *mut T {
 /// pointer has to pick up.
 ///
 /// This API and its claimed semantics are part of the Strict Provenance experiment, see the
-/// [module documentation][crate::ptr] for details.
+/// [module documentation][crate] for details.
 #[must_use]
 #[inline]
 pub fn from_exposed_addr<T>(addr: usize) -> *const T
@@ -442,21 +442,21 @@ where
 
 /// Convert an address back to a mutable pointer, picking up a previously 'exposed' provenance.
 ///
-/// This is equivalent to `addr as ptr`. The provenance of the returned pointer is that of *any*
-/// pointer that was previously passed to [`expose_addr`][pointer::expose_addr]. If there is no
-/// previously 'exposed' provenance that justifies the way this pointer will be used, the
-/// program has undefined behavior. Note that there is no algorithm that decides which
-/// provenance will be used. You can think of this as "guessing" the right provenance, and the
-/// guess will be "maximally in your favor", in the sense that if there is any way to avoid
-/// undefined behavior, then that is the guess that will be taken.
+/// This is equivalent to `addr as *const T`. The provenance of the returned pointer is that of *any*
+/// pointer that was previously passed to [`expose_addr`][Strict::expose_addr] or a `ptr as usize`
+/// cast. If there is no previously 'exposed' provenance that justifies the way this pointer will be
+/// used, the program has undefined behavior. Note that there is no algorithm that decides which
+/// provenance will be used. You can think of this as "guessing" the right provenance, and the guess
+/// will be "maximally in your favor", in the sense that if there is any way to avoid undefined
+/// behavior, then that is the guess that will be taken.
 ///
-/// On platforms with multiple address spaces, it is your responsibility to ensure the the
+/// On platforms with multiple address spaces, it is your responsibility to ensure that the
 /// address makes sense in the address space that this pointer will be used with.
 ///
 /// Using this method means that code is *not* following strict provenance rules. "Guessing" a
 /// suitable provenance complicates specification and reasoning and may not be supported by
 /// tools that help you to stay conformant with the Rust memory model, so it is recommended to
-/// use [`with_addr`][pointer::with_addr] wherever possible.
+/// use [`with_addr`][Strict::with_addr] wherever possible.
 ///
 /// On most platforms this will produce a value with the same bytes as the address. Platforms
 /// which need to store additional information in a pointer may not support this operation,
@@ -464,7 +464,7 @@ where
 /// pointer has to pick up.
 ///
 /// This API and its claimed semantics are part of the Strict Provenance experiment, see the
-/// [module documentation][crate::ptr] for details.
+/// [module documentation][crate] for details.
 #[must_use]
 #[inline]
 pub fn from_exposed_addr_mut<T>(addr: usize) -> *mut T
@@ -510,7 +510,7 @@ pub trait Strict: private::Sealed {
         Self::Pointee: Sized;
 
     /// Gets the "address" portion of the pointer, and 'exposes' the "provenance" part for future
-    /// use in pointer-to-integer casts.
+    /// use in [`from_exposed_addr`][].
     ///
     /// This is equivalent to `self as usize`, which semantically discards *provenance* and
     /// *address-space* information. Furthermore, this (like the `as` cast) has the implicit
