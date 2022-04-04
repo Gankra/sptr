@@ -1,6 +1,7 @@
 # sptr: The Strict Provenance Polyfill
 
-[![crates.io](https://img.shields.io/crates/v/sptr.svg)](https://crates.io/crates/sptr) [![](https://docs.rs/sptr/badge.svg)](https://docs.rs/sptr)
+[![crates.io](https://img.shields.io/crates/v/sptr.svg)](https://crates.io/crates/sptr) [![](https://docs.rs/sptr/badge.svg)](https://docs.rs/sptr) ![Rust CI](https://github.com/Gankra/sptr/workflows/Rust/badge.svg?branch=main)
+
 
 
 
