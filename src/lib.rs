@@ -493,7 +493,7 @@ pub trait Strict: private::Sealed {
     /// *address-space* information. However, unlike `self as usize`, casting the returned address
     /// back to a pointer yields [`invalid`][], which is undefined behavior to dereference. To
     /// properly restore the lost information and obtain a dereferencable pointer, use
-    /// [`with_addr`][pointer::with_addr] or [`map_addr`][pointer::map_addr].
+    /// [`with_addr`][Strict::with_addr] or [`map_addr`][Strict::map_addr].
     ///
     /// If using those APIs is not possible because there is no way to preserve a pointer with the
     /// required provenance, use [`expose_addr`][Strict::expose_addr] and
