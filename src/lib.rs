@@ -11,7 +11,7 @@
 //!
 //! * `pub fn `[`invalid`]`<T>(addr: usize) -> *const T;`
 //! * `pub fn `[`invalid_mut`]`<T>(addr: usize) -> *mut T;`
-//! * `pub fn `[`from_exposed_addr`]`<T>(addr: usize) -> *mut T;`
+//! * `pub fn `[`from_exposed_addr`]`<T>(addr: usize) -> *const T;`
 //! * `pub fn `[`from_exposed_addr_mut`]`<T>(addr: usize) -> *mut T;`
 //!
 //!
@@ -448,7 +448,7 @@ where
 
 /// Convert an address back to a mutable pointer, picking up a previously 'exposed' provenance.
 ///
-/// This is equivalent to `addr as *const T`. The provenance of the returned pointer is that of *any*
+/// This is equivalent to `addr as *mut T`. The provenance of the returned pointer is that of *any*
 /// pointer that was previously passed to [`expose_addr`][Strict::expose_addr] or a `ptr as usize`
 /// cast. If there is no previously 'exposed' provenance that justifies the way this pointer will be
 /// used, the program has undefined behavior. Note that there is no algorithm that decides which
