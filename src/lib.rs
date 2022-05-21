@@ -361,8 +361,6 @@
 //! [Strict Provenance]: https://github.com/rust-lang/rust/issues/95228
 //! [Stacked Borrows]: https://plv.mpi-sws.org/rustbelt/stacked-borrows/
 
-use core::mem;
-
 /// Creates an invalid pointer with the given address.
 ///
 /// This is *currently* equivalent to `addr as *const T` but it expresses the intended semantic
@@ -389,7 +387,11 @@ pub const fn invalid<T>(addr: usize) -> *const T {
     // is *not* the same as from_exposed_addr.
     // SAFETY: every valid integer is also a valid pointer (as long as you don't dereference that
     // pointer).
-    unsafe { mem::transmute(addr) }
+    #[cfg(miri)]
+    return unsafe { core::mem::transmute(addr) };
+    // Outside Miri we keep using casts, so that we can be a `const fn` on old Rust (pre-1.56).
+    #[cfg(not(miri))]
+    return addr as *const T;
 }
 
 /// Creates an invalid mutable pointer with the given address.
@@ -418,7 +420,11 @@ pub const fn invalid_mut<T>(addr: usize) -> *mut T {
     // is *not* the same as from_exposed_addr.
     // SAFETY: every valid integer is also a valid pointer (as long as you don't dereference that
     // pointer).
-    unsafe { mem::transmute(addr) }
+    #[cfg(miri)]
+    return unsafe { core::mem::transmute(addr) };
+    // Outside Miri we keep using casts, so that we can be a `const fn` on old Rust (pre-1.56).
+    #[cfg(not(miri))]
+    return addr as *mut T;
 }
 
 /// Convert an address back to a pointer, picking up a previously 'exposed' provenance.
