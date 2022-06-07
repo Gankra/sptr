@@ -604,7 +604,9 @@ impl<T> Strict for *mut T {
         T: Sized,
     {
         // FIXME(strict_provenance_magic): I am magic and should be a compiler intrinsic.
-        self as usize
+        // SAFETY: Pointer-to-integer transmutes are valid (if you are okay with losing the
+        // provenance).
+        unsafe { core::mem::transmute(self) }
     }
 
     #[must_use]
@@ -658,7 +660,9 @@ impl<T> Strict for *const T {
         T: Sized,
     {
         // FIXME(strict_provenance_magic): I am magic and should be a compiler intrinsic.
-        self as usize
+        // SAFETY: Pointer-to-integer transmutes are valid (if you are okay with losing the
+        // provenance).
+        unsafe { core::mem::transmute(self) }
     }
 
     #[must_use]
