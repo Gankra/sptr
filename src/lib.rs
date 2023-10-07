@@ -502,7 +502,7 @@ mod private {
 }
 
 pub trait Strict: private::Sealed {
-    type Pointee;
+    type Pointee: ?Sized;
     /// Gets the "address" portion of the pointer.
     ///
     /// This is similar to `self as usize`, which semantically discards *provenance* and
@@ -591,10 +591,10 @@ pub trait Strict: private::Sealed {
         Self::Pointee: Sized;
 }
 
-impl<T> private::Sealed for *mut T {}
-impl<T> private::Sealed for *const T {}
+impl<T: ?Sized> private::Sealed for *mut T {}
+impl<T: ?Sized> private::Sealed for *const T {}
 
-impl<T> Strict for *mut T {
+impl<T: ?Sized> Strict for *mut T {
     type Pointee = T;
 
     #[must_use]
@@ -650,7 +650,7 @@ impl<T> Strict for *mut T {
     }
 }
 
-impl<T> Strict for *const T {
+impl<T: ?Sized> Strict for *const T {
     type Pointee = T;
 
     #[must_use]
