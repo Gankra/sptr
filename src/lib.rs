@@ -527,9 +527,7 @@ pub trait Strict: private::Sealed {
     /// might change in the future (including possibly weakening this so it becomes wholly
     /// equivalent to `self as usize`). See the [module documentation][crate] for details.
     #[must_use]
-    fn addr(self) -> usize
-    where
-        Self::Pointee: Sized;
+    fn addr(self) -> usize;
 
     /// Gets the "address" portion of the pointer, and 'exposes' the "provenance" part for future
     /// use in [`from_exposed_addr`][].
@@ -556,9 +554,7 @@ pub trait Strict: private::Sealed {
     ///
     /// [`from_exposed_addr`]: crate::from_exposed_addr
     #[must_use]
-    fn expose_addr(self) -> usize
-    where
-        Self::Pointee: Sized;
+    fn expose_addr(self) -> usize;
 
     /// Creates a new pointer with the given address.
     ///
@@ -599,24 +595,18 @@ impl<T: ?Sized> Strict for *mut T {
 
     #[must_use]
     #[inline]
-    fn addr(self) -> usize
-    where
-        T: Sized,
-    {
+    fn addr(self) -> usize {
         // FIXME(strict_provenance_magic): I am magic and should be a compiler intrinsic.
         // SAFETY: Pointer-to-integer transmutes are valid (if you are okay with losing the
         // provenance).
-        unsafe { core::mem::transmute(self) }
+        unsafe { core::mem::transmute(self.cast::<()>()) }
     }
 
     #[must_use]
     #[inline]
-    fn expose_addr(self) -> usize
-    where
-        T: Sized,
-    {
+    fn expose_addr(self) -> usize {
         // FIXME(strict_provenance_magic): I am magic and should be a compiler intrinsic.
-        self as usize
+        self.cast::<()>() as usize
     }
 
     #[must_use]
@@ -655,24 +645,18 @@ impl<T: ?Sized> Strict for *const T {
 
     #[must_use]
     #[inline]
-    fn addr(self) -> usize
-    where
-        T: Sized,
-    {
+    fn addr(self) -> usize {
         // FIXME(strict_provenance_magic): I am magic and should be a compiler intrinsic.
         // SAFETY: Pointer-to-integer transmutes are valid (if you are okay with losing the
         // provenance).
-        unsafe { core::mem::transmute(self) }
+        unsafe { core::mem::transmute(self.cast::<()>()) }
     }
 
     #[must_use]
     #[inline]
-    fn expose_addr(self) -> usize
-    where
-        T: Sized,
-    {
+    fn expose_addr(self) -> usize {
         // FIXME(strict_provenance_magic): I am magic and should be a compiler intrinsic.
-        self as usize
+        self.cast::<()>() as usize
     }
 
     #[must_use]
